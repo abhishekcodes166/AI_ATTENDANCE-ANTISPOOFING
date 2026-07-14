@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Mark Attendance — AI Attendance{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="eyebrow">Face Recognition</div>
+  <h1>Mark Attendance — {{ subject }}</h1>
+  <p class="sub">Look straight at the camera in good light. Recognition is
+    automatic and takes a few seconds.</p>
+
+  <div id="scanArea">
+    <div class="cam-frame" id="camFrame">
+      <video id="video" autoplay playsinline muted></video>
+    </div>
+    <canvas id="snap" style="display:none"></canvas>
+    <div id="livenessBar" style="display:none;text-align:center;margin-top:14px">
+      <span class="badge warn" style="font-size:.78rem">🛡️ LIVENESS CHECK</span>
+      <span class="status-line" id="livenessStep" style="display:inline;margin-left:10px"></span>
+    </div>
+    <div class="big-instruction" id="livInstruction" style="display:none"></div>
+    <div class="status-line" id="feedback" style="margin-top:16px">
+      <span class="spinner"></span>Starting camera…
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="result-wrap" id="resOk">
+    <div class="result-icon ok">✓</div>
+    <div class="result-title" style="color:var(--ok)" id="okTitle">Attendance Marked</div>
+    <div class="result-sub" id="okSub"></div>
+    <div class="result-sub" style="margin-top:10px" id="okCountdown"></div>
+    <a class="btn" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+  </div>
+
+  <!-- ALREADY MARKED -->
+  <div class="result-wrap" id="resDup">
+    <div class="result-icon warn">!</div>
+    <div class="result-title" style="color:var(--warn)">Attendance Already Marked</div>
+    <div class="result-sub">You are already marked present for {{ subject }} today.</div>
+    <a class="btn secondary" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+  </div>
+
+  <!-- FAILURE -->
+  <div class="result-wrap" id="resErr">
+    <div class="result-icon err">✕</div>
+    <div class="result-title" style="color:var(--err)" id="errTitle">Face Not Recognized</div>
+    <div class="result-sub" id="errSub"></div>
+    <div style="display:flex;gap:12px;justify-content:center">
+      <button class="btn" onclick="location.reload()">Try Again</button>
+      <a class="btn secondary" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+const SUBJECT = {{ subject|tojson }};
+const video = document.getElementById('video');
+const snap = document.getElementById('snap');
+const feedback = document.getElementById('feedback');
+const camFrame = document.getElementById('camFrame');
+let busy = false, finished = false, timer = null, attempts = 0, spoofStreak = 0;
+const MAX_ATTEMPTS = 40; // ~30 seconds
+const MAX_SPOOF_STREAK = 6;
+
+function stopCamera() {
+  clearInterval(timer);
+  if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+}
+
+function show(id) {
+  finished = true;
+  stopCamera();
+  document.getElementById('scanArea').style.display = 'none';
+  document.getElementById(id).style.display = 'block';
+}
+
+function success(d) {
+  document.getElementById('okTitle').textContent = 'Welcome, ' + d.name + '!';
+  document.getElementById('okSub').textContent =
+    'Attendance marked for ' + SUBJECT + ' · Confidence ' + (d.similarity * 100).toFixed(1) + '%';
+  show('resOk');
+  let left = 5;
+  const cd = document.getElementById('okCountdown');
+  cd.textContent = 'Returning to dashboard in ' + left + 's…';
+  const h = setInterval(() => {
+    left--;
+    if (left <= 0) { clearInterval(h); window.location = '/dashboard'; }
+    else cd.textContent = 'Returning to dashboard in ' + left + 's…';
+  }, 1000);
+}
+
+function failure(title, sub) {
+  document.getElementById('errTitle').textContent = title;
+  document.getElementById('errSub').textContent = sub;
+  show('resErr');
+}
+
+function scanning(msg) {
+  feedback.innerHTML = '<span class="spinner"></span>' + msg;
+}
+
+function grabFrame() {
+  snap.getContext('2d').drawImage(video, 0, 0, snap.width, snap.height);
+  return snap.toDataURL('image/jpeg', 0.85);
+}
+
+// ---- Phase 1: liveness challenges (anti-spoofing) ----
+async function runLiveness() {
+  const bar = document.getElementById('livenessBar');
+  const stepEl = document.getElementById('livenessStep');
+  const inst = document.getElementById('livInstruction');
+  bar.style.display = 'block';
+  inst.style.display = 'block';
+  const start = await fetch('/api/liveness/start', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ purpose: 'attendance' })
+  }).then(r => r.json());
+  const livInterval = start.interval_ms || 200;
+  inst.textContent = start.instruction;
+  stepEl.textContent = 'Challenge ' + start.step + ' of ' + start.total;
+  scanning('Prove you are really here — a photo cannot do this');
+
+  return new Promise(resolve => {
+    let livBusy = false;
+    const livTimer = setInterval(async () => {
+      if (livBusy) return;
+      livBusy = true;
+      try {
+        const d = await fetch('/api/liveness/frame', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ purpose: 'attendance', image: grabFrame() })
+        }).then(r => r.json());
+        if (d.failed) {
+          clearInterval(livTimer);
+          failure('Liveness Check Failed', d.reason +
+            ' — attendance was NOT marked.');
+          return; // never resolves — user uses Try Again
+        }
+        if (d.done) {
+          clearInterval(livTimer);
+          bar.style.display = 'none';
+          inst.style.display = 'none';
+          camFrame.className = 'cam-frame good';
+          scanning('✓ Liveness confirmed — recognizing your face…');
+          setTimeout(resolve, 700);
+          return;
+        }
+        inst.textContent = d.instruction;
+        stepEl.textContent = 'Challenge ' + d.step + ' of ' + d.total;
+      } catch (e) { /* transient network error, keep trying */ }
+      livBusy = false;
+    }, livInterval);
+  });
+}
+
+// ---- Phase 2: recognition ----
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' }, audio: false });
+    video.srcObject = stream;
+    video.onloadedmetadata = async () => {
+      snap.width = video.videoWidth; snap.height = video.videoHeight;
+      await runLiveness();
+      timer = setInterval(sendFrame, 750);
+    };
+  } catch (e) {
+    failure('Camera Unavailable', 'Please allow camera access in your browser and try again.');
+  }
+}
+
+async function sendFrame() {
+  if (busy || finished) return;
+  busy = true;
+  try {
+    const res = await fetch('/api/recognize', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ image: grabFrame(), subject: SUBJECT })
+    });
+    const d = await res.json();
+    attempts++;
+    if (d.status === 'needs_liveness') {   // token expired: re-verify
+      clearInterval(timer);
+      await runLiveness();
+      timer = setInterval(sendFrame, 750);
+      busy = false;
+      return;
+    }
+    if (d.status !== 'spoof') spoofStreak = 0;
+    if (d.status === 'spoof') {
+      camFrame.className = 'cam-frame bad';
+      spoofStreak++;
+      scanning('⚠️ ' + d.message + '…');
+      if (spoofStreak >= MAX_SPOOF_STREAK)
+        failure('Spoof Attempt Detected',
+                'A photo or screen was detected instead of a real face. ' +
+                'Attendance was NOT marked.');
+    } else if (d.status === 'marked') {
+      camFrame.className = 'cam-frame good';
+      success(d);
+    } else if (d.status === 'duplicate') {
+      show('resDup');
+    } else if (d.status === 'mismatch') {
+      failure('Face Does Not Match This Account', d.message);
+    } else if (d.status === 'error') {
+      failure('Cannot Mark Attendance', d.message);
+    } else if (d.status === 'unknown') {
+      camFrame.className = 'cam-frame bad';
+      scanning('Face not matched yet (' + (d.similarity * 100).toFixed(0) + '%) — hold still…');
+      if (attempts >= MAX_ATTEMPTS)
+        failure('Unknown Person', 'Your face could not be matched. Attendance was NOT marked. Try better lighting, or ask the admin to re-train the model.');
+    } else { // retry
+      camFrame.className = 'cam-frame bad';
+      scanning(d.message + ' — adjust and hold still…');
+      if (attempts >= MAX_ATTEMPTS)
+        failure('No Face Detected', 'Could not detect a clear face. Attendance was NOT marked. Move to better lighting and try again.');
+    }
+  } catch (e) {
+    scanning('Connection error — retrying…');
+  }
+  busy = false;
+}
+startCamera();
+</script>
+{% endblock %}

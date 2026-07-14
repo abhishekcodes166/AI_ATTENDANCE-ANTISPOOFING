@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}AI Attendance System{% endblock %}</title>
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --bg-grad: radial-gradient(1200px 600px at 80% -10%, #1e2a5e33, transparent),
+               radial-gradient(900px 500px at -10% 110%, #0e4a5e2e, transparent);
+    --surface: #101828;
+    --surface-2: #16203a;
+    --surface-3: #1c2947;
+    --border: #23304d;
+    --border-soft: #1b2740;
+    --text: #e7ecf5;
+    --muted: #8b98b4;
+    --primary: #4f7cff;
+    --primary-2: #6a5cff;
+    --primary-grad: linear-gradient(135deg, #4f7cff, #6a5cff);
+    --ok: #22c58b;
+    --warn: #f5b544;
+    --err: #f0616d;
+    --radius: 14px;
+    --shadow: 0 10px 30px -12px rgba(0,0,0,.55);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    background-image: var(--bg-grad);
+  }
+  /* ---------- navbar ---------- */
+  nav {
+    display: flex; align-items: center; gap: 26px;
+    padding: 0 30px; height: 62px;
+    background: #0d1426;
+    border-bottom: 1px solid var(--border-soft);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .brand .logo {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: var(--primary-grad); display: grid; place-items: center;
+    font-size: 17px; box-shadow: 0 4px 14px -4px #4f7cff88;
+  }
+  .brand .name { font-weight: 800; font-size: 1.02rem; color: var(--text); letter-spacing: -.01em; }
+  .brand .name span { color: var(--primary); }
+  nav a.link {
+    color: var(--muted); text-decoration: none; font-size: .9rem; font-weight: 600;
+    padding: 6px 2px; border-bottom: 2px solid transparent; transition: color .15s;
+  }
+  nav a.link:hover { color: var(--text); }
+  nav .spacer { flex: 1; }
+  .user-chip {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    padding: 6px 14px 6px 7px; border-radius: 999px; font-size: .85rem;
+  }
+  .user-chip .avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--primary-grad); display: grid; place-items: center;
+    font-size: .72rem; font-weight: 800; color: #fff;
+  }
+  .user-chip a { color: var(--muted); text-decoration: none; font-weight: 600; }
+  .user-chip a:hover { color: var(--err); }
+
+  main { max-width: 1060px; margin: 34px auto 60px; padding: 0 22px; }
+
+  /* ---------- cards ---------- */
+  .card {
+    background: var(--surface); border: 1px solid var(--border-soft);
+    border-radius: var(--radius); padding: 30px; margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  .card.tight { padding: 22px 26px; }
+  .eyebrow {
+    font-size: .72rem; font-weight: 800; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--primary); margin-bottom: 8px;
+  }
+  h1 { font-size: 1.45rem; letter-spacing: -.02em; margin-bottom: 6px; }
+  h2 { font-size: 1.08rem; letter-spacing: -.01em; margin-bottom: 14px;
+       display: flex; align-items: center; gap: 8px; }
+  p.sub { color: var(--muted); margin-bottom: 20px; font-size: .92rem; line-height: 1.6; }
+
+  /* ---------- forms ---------- */
+  label { display: block; font-size: .8rem; font-weight: 700; color: var(--muted);
+          margin: 14px 0 6px; letter-spacing: .02em; }
+  input, select {
+    width: 100%; padding: 11px 14px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface-2);
+    color: var(--text); font-size: .94rem; transition: border-color .15s, box-shadow .15s;
+  }
+  input::placeholder { color: #5d6a87; }
+  input:focus, select:focus {
+    outline: none; border-color: var(--primary);
+    box-shadow: 0 0 0 3px #4f7cff2e;
+  }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 20px; padding: 12px 24px;
+    background: var(--primary-grad); color: #fff; font-weight: 700;
+    border: none; border-radius: 10px; cursor: pointer; font-size: .93rem;
+    text-decoration: none; letter-spacing: .01em;
+    box-shadow: 0 6px 18px -6px #4f7cff99;
+    transition: transform .12s, box-shadow .12s, filter .12s;
+  }
+  .btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+  .btn.secondary {
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); box-shadow: none;
+  }
+  .btn.danger { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 6px 18px -6px #ef444488; }
+  .btn.sm { padding: 7px 14px; font-size: .8rem; margin: 0; border-radius: 8px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+
+  /* ---------- alerts / badges ---------- */
+  .alert { padding: 12px 16px; border-radius: 10px; margin-bottom: 16px;
+           font-size: .89rem; line-height: 1.5; border: 1px solid; }
+  .alert.err { background: #f0616d14; border-color: #f0616d55; color: #ffb3b9; }
+  .alert.ok  { background: #22c58b14; border-color: #22c58b55; color: #9ff0d2; }
+  .alert.warn{ background: #f5b54414; border-color: #f5b54455; color: #fcdfa4; }
+
+  .badge { padding: 4px 12px; border-radius: 999px; font-size: .73rem;
+           font-weight: 800; letter-spacing: .03em; display: inline-block; }
+  .badge.ok   { background: #22c58b1f; color: var(--ok); border: 1px solid #22c58b44; }
+  .badge.warn { background: #f5b5441f; color: var(--warn); border: 1px solid #f5b54444; }
+  .badge.muted{ background: var(--surface-3); color: var(--muted); border: 1px solid var(--border); }
+
+  /* ---------- tables ---------- */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border-soft);
+                border-radius: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: .87rem; }
+  th { text-align: left; padding: 11px 14px; color: var(--muted); font-weight: 700;
+       font-size: .74rem; text-transform: uppercase; letter-spacing: .07em;
+       background: var(--surface-2); border-bottom: 1px solid var(--border-soft); }
+  td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--border-soft); }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background .12s; }
+  tbody tr:hover { background: #16203a66; }
+
+  /* ---------- stats ---------- */
+  .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+              gap: 14px; margin: 18px 0; }
+  .stat { background: var(--surface-2); border: 1px solid var(--border-soft);
+          border-radius: 12px; padding: 16px 18px; }
+  .stat .k { color: var(--muted); font-size: .7rem; font-weight: 700;
+             text-transform: uppercase; letter-spacing: .08em; }
+  .stat .v { font-size: 1.35rem; font-weight: 800; margin-top: 6px; letter-spacing: -.02em; }
+
+  /* ---------- progress ---------- */
+  .progress-outer { background: var(--surface-2); border-radius: 999px; height: 14px;
+                    overflow: hidden; border: 1px solid var(--border-soft); }
+  .progress-inner { height: 100%; width: 0%; border-radius: 999px;
+                    background: var(--primary-grad);
+                    box-shadow: 0 0 12px #4f7cff77; transition: width .35s ease; }
+
+  /* ---------- webcam ---------- */
+  .cam-frame { position: relative; max-width: 580px; margin: 0 auto; }
+  video { width: 100%; border-radius: 16px; border: 1px solid var(--border);
+          background: #000; display: block; box-shadow: var(--shadow); }
+  .cam-frame::after {
+    content: ""; position: absolute; inset: 0; border-radius: 16px;
+    border: 2px solid transparent; pointer-events: none; transition: border-color .2s;
+  }
+  .cam-frame.good::after { border-color: var(--ok); box-shadow: inset 0 0 40px #22c58b22; }
+  .cam-frame.bad::after  { border-color: #f5b54488; }
+
+  .big-instruction { font-size: 1.45rem; font-weight: 800; letter-spacing: -.01em;
+    text-align: center; margin: 20px 0 4px; min-height: 2.1rem; }
+  .status-line { text-align: center; color: var(--muted);
+                 min-height: 1.5rem; font-size: .88rem; }
+
+  /* ---------- result states ---------- */
+  .result-wrap { display: none; text-align: center; padding: 26px 10px 6px;
+                 animation: pop .35s ease; }
+  @keyframes pop { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+  .result-icon { width: 86px; height: 86px; border-radius: 50%; margin: 0 auto 16px;
+                 display: grid; place-items: center; font-size: 42px; }
+  .result-icon.ok   { background: #22c58b1f; border: 2px solid var(--ok);
+                      box-shadow: 0 0 40px #22c58b44; color: var(--ok); }
+  .result-icon.err  { background: #f0616d1f; border: 2px solid var(--err);
+                      box-shadow: 0 0 40px #f0616d44; color: var(--err); }
+  .result-icon.warn { background: #f5b5441f; border: 2px solid var(--warn);
+                      box-shadow: 0 0 40px #f5b54444; color: var(--warn); }
+  .result-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 6px; }
+  .result-sub { color: var(--muted); font-size: .92rem; }
+
+  .spinner { width: 18px; height: 18px; border: 2.5px solid var(--border);
+             border-top-color: var(--primary); border-radius: 50%;
+             display: inline-block; vertical-align: -4px; margin-right: 8px;
+             animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- toast ---------- */
+  #toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(20px);
+           background: var(--surface-3); border: 1px solid var(--border);
+           color: var(--text); padding: 12px 20px; border-radius: 12px;
+           font-size: .88rem; font-weight: 600; box-shadow: var(--shadow);
+           opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; z-index: 100; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---------- pose chips ---------- */
+  .pose-chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 16px; }
+  .pose-chip { padding: 5px 13px; border-radius: 999px; font-size: .75rem; font-weight: 700;
+               background: var(--surface-2); border: 1px solid var(--border-soft); color: var(--muted); }
+  .pose-chip.active { background: #4f7cff22; border-color: var(--primary); color: var(--primary); }
+  .pose-chip.done { background: #22c58b18; border-color: #22c58b44; color: var(--ok); }
+
+  .subject-pills { display: flex; gap: 10px; flex-wrap: wrap; }
+  .subject-pill { display: inline-flex; align-items: center; gap: 9px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    padding: 7px 8px 7px 15px; border-radius: 999px; font-size: .85rem; font-weight: 600; }
+  .subject-pill button { background: #f0616d22; color: var(--err); border: none;
+    width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+    font-size: .8rem; font-weight: 800; line-height: 1; }
+  .subject-pill button:hover { background: #f0616d44; }
+</style>
+</head>
+<body>
+<nav>
+  <a class="brand" href="{{ url_for('index') }}">
+    <span class="logo">🎓</span>
+    <span class="name">AI<span>Attendance</span></span>
+  </a>
+  {% if session.get('student_id') %}
+    <a class="link" href="{{ url_for('dashboard') }}">Dashboard</a>
+  {% elif session.get('is_admin') %}
+    <a class="link" href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>
+  {% endif %}
+  <span class="spacer"></span>
+  {% if session.get('student_id') %}
+    <div class="user-chip">
+      <span class="avatar">{{ session.get('student_name','?')[0]|upper }}</span>
+      <span>{{ session.get('student_name') }}</span>
+      <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+  {% elif session.get('is_admin') %}
+    <div class="user-chip">
+      <span class="avatar">A</span>
+      <span>Administrator</span>
+      <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+  {% else %}
+    <a class="link" href="{{ url_for('login') }}">Student Login</a>
+    <a class="link" href="{{ url_for('register') }}">Register</a>
+    <a class="link" href="{{ url_for('admin_login') }}">Admin</a>
+  {% endif %}
+</nav>
+<main>
+{% block content %}{% endblock %}
+</main>
+<div id="toast"></div>
+<script>
+function toast(msg, ms=2600) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms);
+}
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

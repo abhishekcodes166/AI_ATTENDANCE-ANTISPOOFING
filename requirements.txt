@@ -1,0 +1,7 @@
+flask>=3.0
+tensorflow>=2.16
+opencv-python>=4.9,<5  # OpenCV 5 removed the core Haar CascadeClassifier API
+numpy
+matplotlib
+torch                  # MiniFASNet anti-spoofing (liveness) models
+pillow

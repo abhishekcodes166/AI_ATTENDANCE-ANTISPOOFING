@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Register — AI Attendance{% endblock %}
+{% block content %}
+<div class="card" style="max-width:660px;margin:3vh auto 0">
+  <div class="eyebrow">Step 1 of 2 · One-time only</div>
+  <h1>Student Registration</h1>
+  <p class="sub">Create your account. Right after this, your face dataset
+    (~200 images) is captured automatically — you'll never register again.</p>
+  {% if error %}<div class="alert err">{{ error }}
+    {% if 'already registered' in error %}
+      <a href="{{ url_for('login') }}" style="color:var(--primary);font-weight:700">Log in →</a>
+    {% endif %}
+  </div>{% endif %}
+  <form method="post">
+    <div class="grid2">
+      <div><label>Student ID</label><input name="student_id" required value="{{ form.get('student_id','') }}" placeholder="e.g. 220101"></div>
+      <div><label>Roll Number</label><input name="roll_number" required value="{{ form.get('roll_number','') }}" placeholder="e.g. 19"></div>
+    </div>
+    <label>Full Name</label><input name="full_name" required value="{{ form.get('full_name','') }}" placeholder="Your full name">
+    <div class="grid2">
+      <div><label>Department</label><input name="department" required value="{{ form.get('department','') }}" placeholder="e.g. CSE"></div>
+      <div><label>Semester</label>
+        <select name="semester" required>
+          <option value="" disabled {% if not form.get('semester') %}selected{% endif %}>Select semester</option>
+          {% for s in semesters %}
+          <option value="{{ s }}" {% if form.get('semester') == s %}selected{% endif %}>Semester {{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="grid2">
+      <div><label>Section</label><input name="section" required value="{{ form.get('section','') }}" placeholder="e.g. A"></div>
+      <div><label>Email</label><input type="email" name="email" required value="{{ form.get('email','') }}" placeholder="you@college.edu"></div>
+    </div>
+    <label>Password</label><input type="password" name="password" required minlength="6" placeholder="Minimum 6 characters">
+    <button class="btn" type="submit" style="width:100%">Create Account &amp; Start Face Capture →</button>
+  </form>
+  <p style="margin-top:18px;font-size:.88rem;color:var(--muted);text-align:center">
+    Already registered?
+    <a href="{{ url_for('login') }}" style="color:var(--primary);font-weight:700;text-decoration:none">Log in</a>
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:620px;margin:6vh auto 0;text-align:center">
+  <div class="result-wrap" style="display:block;padding-top:8px">
+    <div class="result-icon ok">✓</div>
+    <div class="result-title">Dataset Successfully Collected</div>
+    <div class="result-sub" style="margin-top:8px">
+      {{ student.num_images }} face images saved for
+      <b style="color:var(--text)">{{ student.full_name }}</b> (ID: {{ student.student_id }})
+    </div>
+  </div>
+  <p style="color:var(--muted);font-size:.9rem;line-height:1.7;margin-top:18px">
+    Your one-time registration is almost complete. The administrator will now
+    train the FaceNet AI model on your images. When training finishes, your
+    status becomes <span class="badge ok">Completed</span> and you can mark
+    attendance just by logging in — no face registration ever again.
+  </p>
+  <a class="btn" href="{{ url_for('dashboard') }}">Go to Dashboard</a>
+</div>
+{% endblock %}

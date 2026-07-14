@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — AI Attendance{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="eyebrow">Student Dashboard</div>
+  <h1>Welcome, {{ student.full_name }}</h1>
+  <p class="sub">{{ student.department }} · Semester {{ student.semester }} ·
+    Section {{ student.section }} · Roll {{ student.roll_number }}</p>
+
+  <div class="stat-row">
+    <div class="stat"><div class="k">Student ID</div><div class="v">{{ student.student_id }}</div></div>
+    <div class="stat"><div class="k">Registration</div>
+      <div class="v" style="font-size:1rem;padding-top:5px">
+        {% if student.registration_status == 'completed' %}
+          <span class="badge ok">Completed</span>
+        {% elif student.registration_status == 'dataset_collected' %}
+          <span class="badge warn">Awaiting Training</span>
+        {% else %}
+          <span class="badge muted">Face Not Captured</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="stat"><div class="k">Face Images</div><div class="v">{{ student.num_images }}</div></div>
+    <div class="stat"><div class="k">Attendance Records</div><div class="v">{{ records|length }}</div></div>
+  </div>
+
+  {% if student.registration_status == 'registered' %}
+    <div class="alert warn">Your face dataset has not been collected yet —
+      complete it to finish your one-time registration.</div>
+    <a class="btn" href="{{ url_for('capture') }}">📷 Start Face Capture</a>
+  {% elif not model_ready or not enrolled %}
+    <div class="alert warn">Your face dataset is collected, but the AI model
+      hasn't been trained with it yet. Once the administrator trains the model,
+      you can mark attendance here.</div>
+  {% else %}
+    <form action="{{ url_for('attendance') }}" method="get"
+          style="display:flex;gap:14px;align-items:flex-end;max-width:520px;flex-wrap:wrap">
+      <div style="flex:1;min-width:240px">
+        <label>Subject</label>
+        <select name="subject">
+          {% for s in subjects %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+      </div>
+      <button class="btn" type="submit" style="margin-top:0">📷 Mark Attendance</button>
+    </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>🗓️ My Attendance History</h2>
+  {% if records %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Date</th><th>Time</th><th>Subject</th><th>Confidence</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for r in records %}
+    <tr>
+      <td>{{ r.date }}</td><td>{{ r.time }}</td><td>{{ r.subject }}</td>
+      <td>{{ '%.1f' % (r.confidence * 100) }}%</td>
+      <td><span class="badge ok">{{ r.status }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p style="color:var(--muted);font-size:.9rem">No attendance records yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

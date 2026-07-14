@@ -1,0 +1,90 @@
+# ==========================
+# Python
+# ==========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# ==========================
+# Claude Code
+# ==========================
+.claude/
+
+# ==========================
+# Trained models / training artifacts
+# (the FaceNet model is trained locally from collected data)
+# ==========================
+models/
+*.h5
+*.keras
+*.ckpt
+*.pb
+*.tflite
+*.weights.h5
+logs/
+training_history.png
+
+# Keep the vendored anti-spoofing weights — required to run liveness
+!third_party/Silent-Face-Anti-Spoofing/**
+
+# ==========================
+# Private data — NEVER push students' face images or attendance records
+# ==========================
+dataset/
+attendance.db
+*.db
+*.sqlite3
+
+# ==========================
+# IDE
+# ==========================
+.vscode/
+.idea/
+
+# ==========================
+# OS
+# ==========================
+.DS_Store
+Thumbs.db
+
+# ==========================
+# Jupyter / caches
+# ==========================
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.cache/
+
+# ==========================
+# Environment variables / secrets
+# ==========================
+.env
+
+# ==========================
+# Build
+# ==========================
+build/
+dist/
+*.egg-info/
+
+venv/
+dataset/
+__pycache__/
+*.pyc
+*.db
+*.sqlite3
+*.h5
+*.weights.h5
+*.keras
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.pb
+logs/

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Login — AI Attendance{% endblock %}
+{% block content %}
+<div style="max-width:440px;margin:6vh auto 0">
+  <div style="text-align:center;margin-bottom:26px">
+    <div style="width:64px;height:64px;border-radius:18px;background:var(--primary-grad);
+                display:grid;place-items:center;font-size:32px;margin:0 auto 14px;
+                box-shadow:0 10px 30px -8px #4f7cff99">🎓</div>
+    <h1 style="font-size:1.6rem">AI Attendance</h1>
+    <p class="sub" style="margin-bottom:0">Face recognition attendance, powered by
+      FaceNet trained from scratch</p>
+  </div>
+
+  <div class="card">
+    <h2>Student Login</h2>
+    {% if error %}<div class="alert err">{{ error }}</div>{% endif %}
+    <form method="post">
+      <label>Email</label>
+      <input type="email" name="email" required placeholder="you@college.edu" autofocus>
+      <label>Password</label>
+      <input type="password" name="password" required placeholder="••••••••">
+      <button class="btn" type="submit" style="width:100%">Sign In</button>
+    </form>
+    <p style="margin-top:18px;font-size:.88rem;color:var(--muted);text-align:center">
+      New student?
+      <a href="{{ url_for('register') }}" style="color:var(--primary);font-weight:700;text-decoration:none">
+        Register once →</a>
+    </p>
+  </div>
+
+  <p style="text-align:center;font-size:.84rem;color:var(--muted)">
+    Faculty? <a href="{{ url_for('admin_login') }}"
+      style="color:var(--muted);font-weight:700">Administrator login</a>
+  </p>
+</div>
+{% endblock %}

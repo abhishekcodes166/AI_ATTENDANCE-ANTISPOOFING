@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+{% block title %}Admin — AI Attendance{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="eyebrow">Administration</div>
+  <h1>Admin Dashboard</h1>
+  <p class="sub">
+    Model status:
+    {% if model_ready %}<span class="badge ok">facenet_model.keras trained</span>
+    {% else %}<span class="badge warn">Not trained yet</span>{% endif %}
+  </p>
+
+  <h2>🧠 Train AI Model</h2>
+  <p class="sub">Trains the FaceNet architecture completely from scratch (random
+    initialization, triplet loss with semi-hard mining) on all collected student
+    datasets, then regenerates every student's 128-D embedding. Needs at least
+    2 students with datasets.</p>
+  <button class="btn" id="trainBtn" onclick="startTraining()">Train AI Model</button>
+
+  <div id="trainPanel" style="display:none;margin-top:20px">
+    <div class="progress-outer"><div class="progress-inner" id="trainBar"></div></div>
+    <div class="stat-row" style="margin-top:16px">
+      <div class="stat"><div class="k">Epoch</div><div class="v" id="tEpoch">–</div></div>
+      <div class="stat"><div class="k">Loss</div><div class="v" id="tLoss">–</div></div>
+      <div class="stat"><div class="k">Accuracy</div><div class="v" id="tAcc">–</div></div>
+      <div class="stat"><div class="k">Val Accuracy</div><div class="v" id="tValAcc">–</div></div>
+      <div class="stat"><div class="k">ETA</div><div class="v" id="tEta">–</div></div>
+    </div>
+    <div class="status-line" id="tMessage" style="text-align:left"></div>
+  </div>
+
+  {% if history_plot %}
+  <div style="margin-top:22px">
+    <h2>📈 Training Metrics</h2>
+    <img src="{{ url_for('admin_history_plot') }}?t={{ range(1,999999)|random }}"
+         style="max-width:100%;border-radius:12px;border:1px solid var(--border-soft)">
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>📚 Subjects</h2>
+  <p class="sub">Subjects available in the attendance dropdown. Removing a
+    subject does not delete existing attendance records.</p>
+  <div class="subject-pills" id="subjectPills">
+    {% for s in subjects %}
+    <span class="subject-pill">{{ s }}
+      <button title="Remove subject" onclick="deleteSubject({{ s|tojson }})">✕</button>
+    </span>
+    {% endfor %}
+  </div>
+  <form onsubmit="return addSubject(event)"
+        style="display:flex;gap:12px;align-items:flex-end;max-width:480px;margin-top:6px">
+    <div style="flex:1">
+      <label>New subject</label>
+      <input id="newSubject" placeholder="e.g. Compiler Design" maxlength="80">
+    </div>
+    <button class="btn sm" type="submit" style="padding:11px 18px">+ Add</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>🎓 Semesters</h2>
+  <p class="sub">Semester options shown in the registration form. Changing this
+    list does not affect already-registered students — update a student's
+    semester from the table below instead.</p>
+  <div class="subject-pills" id="semesterPills">
+    {% for s in semesters %}
+    <span class="subject-pill">Semester {{ s }}
+      <button title="Remove semester" onclick="deleteSemester({{ s|tojson }})">✕</button>
+    </span>
+    {% endfor %}
+  </div>
+  <form onsubmit="return addSemester(event)"
+        style="display:flex;gap:12px;align-items:flex-end;max-width:480px;margin-top:6px">
+    <div style="flex:1">
+      <label>New semester</label>
+      <input id="newSemester" placeholder="e.g. 9" maxlength="20">
+    </div>
+    <button class="btn sm" type="submit" style="padding:11px 18px">+ Add</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>👥 Registered Students ({{ students|length }})</h2>
+  {% if students %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>ID</th><th>Name</th><th>Dept</th><th>Sem</th><th>Sec</th>
+        <th>Images</th><th>Status</th><th>Enrolled</th><th></th></tr></thead>
+    <tbody>
+    {% for s in students %}
+    <tr>
+      <td style="font-weight:700">{{ s.student_id }}</td><td>{{ s.full_name }}</td>
+      <td>{{ s.department }}</td>
+      <td>
+        <select style="width:auto;padding:5px 8px;font-size:.82rem"
+                onchange="setStudentSemester('{{ s.student_id }}', this)">
+          {% for sem in semesters %}
+          <option value="{{ sem }}" {% if s.semester == sem %}selected{% endif %}>{{ sem }}</option>
+          {% endfor %}
+          {% if s.semester not in semesters %}
+          <option value="{{ s.semester }}" selected>{{ s.semester }}</option>
+          {% endif %}
+        </select>
+      </td>
+      <td>{{ s.section }}</td>
+      <td>{{ s.images_on_disk }}</td>
+      <td>
+        {% if s.registration_status == 'completed' %}<span class="badge ok">Completed</span>
+        {% elif s.registration_status == 'dataset_collected' %}<span class="badge warn">Awaiting Training</span>
+        {% else %}<span class="badge muted">No Dataset</span>{% endif %}
+      </td>
+      <td>{% if s.enrolled %}✅{% else %}—{% endif %}</td>
+      <td><button class="btn danger sm"
+            onclick="resetStudent('{{ s.student_id }}','{{ s.full_name }}')">Reset Face Data</button></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p style="color:var(--muted);font-size:.9rem">No students registered yet.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>📋 Attendance Records
+    <a class="btn secondary sm" href="{{ url_for('admin_export_csv') }}">Export CSV</a>
+  </h2>
+  {% if records %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Student ID</th><th>Name</th><th>Date</th><th>Time</th>
+        <th>Subject</th><th>Confidence</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for r in records %}
+    <tr>
+      <td style="font-weight:700">{{ r.student_id }}</td><td>{{ r.name }}</td><td>{{ r.date }}</td>
+      <td>{{ r.time }}</td><td>{{ r.subject }}</td>
+      <td>{{ '%.1f' % (r.confidence * 100) }}%</td>
+      <td><span class="badge ok">{{ r.status }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p style="color:var(--muted);font-size:.9rem">No attendance records yet.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+let pollTimer = null;
+
+function fmtEta(s) {
+  if (s == null) return '–';
+  const m = Math.floor(s / 60), sec = s % 60;
+  return m > 0 ? (m + 'm ' + sec + 's') : (sec + 's');
+}
+
+async function startTraining() {
+  const res = await fetch('/api/admin/train', { method: 'POST' });
+  const d = await res.json();
+  document.getElementById('trainPanel').style.display = 'block';
+  document.getElementById('tMessage').textContent = d.message;
+  toast(d.message);
+  if (d.ok) beginPolling();
+}
+
+function beginPolling() {
+  document.getElementById('trainBtn').disabled = true;
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(poll, 1500);
+}
+
+async function poll() {
+  const res = await fetch('/api/train_status');
+  const s = await res.json();
+  document.getElementById('trainPanel').style.display = 'block';
+  document.getElementById('trainBar').style.width = s.progress + '%';
+  document.getElementById('tEpoch').textContent = s.epoch + ' / ' + s.total_epochs;
+  document.getElementById('tLoss').textContent = s.loss ?? '–';
+  document.getElementById('tAcc').textContent = s.accuracy != null ? (s.accuracy * 100).toFixed(1) + '%' : '–';
+  document.getElementById('tValAcc').textContent = s.val_accuracy != null ? (s.val_accuracy * 100).toFixed(1) + '%' : '–';
+  document.getElementById('tEta').textContent = fmtEta(s.eta_seconds);
+  document.getElementById('tMessage').textContent = s.message;
+  if (!s.running && (s.stage === 'done' || s.stage === 'error')) {
+    clearInterval(pollTimer);
+    document.getElementById('trainBtn').disabled = false;
+    toast(s.stage === 'done' ? 'Training complete ✓' : 'Training failed');
+    if (s.stage === 'done') setTimeout(() => location.reload(), 1800);
+  }
+}
+
+async function addSubject(ev) {
+  ev.preventDefault();
+  const name = document.getElementById('newSubject').value.trim();
+  if (!name) return false;
+  const res = await fetch('/api/admin/add_subject', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name })
+  });
+  const d = await res.json();
+  toast(d.message);
+  if (d.ok) renderSubjects(d.subjects);
+  document.getElementById('newSubject').value = '';
+  return false;
+}
+
+async function deleteSubject(name) {
+  if (!confirm('Remove subject "' + name + '" from the attendance list?')) return;
+  const res = await fetch('/api/admin/delete_subject', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name })
+  });
+  const d = await res.json();
+  toast(d.message);
+  if (d.ok) renderSubjects(d.subjects);
+}
+
+function renderSubjects(list) {
+  const wrap = document.getElementById('subjectPills');
+  wrap.innerHTML = '';
+  for (const s of list) {
+    const pill = document.createElement('span');
+    pill.className = 'subject-pill';
+    pill.textContent = s + ' ';
+    const btn = document.createElement('button');
+    btn.textContent = '✕'; btn.title = 'Remove subject';
+    btn.onclick = () => deleteSubject(s);
+    pill.appendChild(btn);
+    wrap.appendChild(pill);
+  }
+}
+
+async function addSemester(ev) {
+  ev.preventDefault();
+  const name = document.getElementById('newSemester').value.trim();
+  if (!name) return false;
+  const res = await fetch('/api/admin/add_semester', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name })
+  });
+  const d = await res.json();
+  toast(d.message);
+  if (d.ok) renderSemesters(d.semesters);
+  document.getElementById('newSemester').value = '';
+  return false;
+}
+
+async function deleteSemester(name) {
+  if (!confirm('Remove "Semester ' + name + '" from the registration options?')) return;
+  const res = await fetch('/api/admin/delete_semester', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name })
+  });
+  const d = await res.json();
+  toast(d.message);
+  if (d.ok) renderSemesters(d.semesters);
+}
+
+function renderSemesters(list) {
+  const wrap = document.getElementById('semesterPills');
+  wrap.innerHTML = '';
+  for (const s of list) {
+    const pill = document.createElement('span');
+    pill.className = 'subject-pill';
+    pill.textContent = 'Semester ' + s + ' ';
+    const btn = document.createElement('button');
+    btn.textContent = '✕'; btn.title = 'Remove semester';
+    btn.onclick = () => deleteSemester(s);
+    pill.appendChild(btn);
+    wrap.appendChild(pill);
+  }
+}
+
+async function setStudentSemester(id, sel) {
+  const res = await fetch('/api/admin/set_student_semester', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ student_id: id, semester: sel.value })
+  });
+  const d = await res.json();
+  toast(d.message);
+}
+
+async function resetStudent(id, name) {
+  if (!confirm('Reset face data for ' + name + ' (' + id + ')?\n' +
+               'Their dataset and embedding will be deleted and they must capture again.')) return;
+  const res = await fetch('/api/admin/reset_student', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ student_id: id })
+  });
+  const d = await res.json();
+  toast(d.message);
+  setTimeout(() => location.reload(), 900);
+}
+
+// resume polling if training is already running (e.g. page refresh)
+fetch('/api/train_status').then(r => r.json()).then(s => {
+  if (s.running) beginPolling();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Face Dataset Collection — AI Attendance{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="eyebrow">Step 2 of 2 · Automatic — no clicking needed</div>
+  <h1>Face Dataset Collection</h1>
+  <p class="sub">
+    {{ student.full_name }} ({{ student.student_id }}) — the camera captures
+    <b>{{ total_images }} images</b> automatically in about a minute.
+    Sit in a <b>well-lit</b> spot, keep your face inside the frame, and follow
+    the instruction below. For LEFT/RIGHT, turn <b>slowly and slightly</b> —
+    small movements are enough.
+  </p>
+
+  <div class="cam-frame" id="camFrame">
+    <video id="video" autoplay playsinline muted></video>
+  </div>
+  <canvas id="snap" style="display:none"></canvas>
+
+  <div id="livenessBar" style="display:none;text-align:center;margin-top:16px">
+    <span class="badge warn" style="font-size:.78rem">🛡️ LIVENESS CHECK</span>
+    <span class="status-line" id="livenessStep" style="display:inline;margin-left:10px"></span>
+  </div>
+
+  <div class="big-instruction" id="instruction">Starting camera…</div>
+  <div class="status-line" id="feedback"></div>
+
+  <div class="result-wrap" id="livenessFail">
+    <div class="result-icon err">✕</div>
+    <div class="result-title" style="color:var(--err)">Liveness Check Failed</div>
+    <div class="result-sub" id="livenessFailReason"></div>
+    <button class="btn" onclick="location.reload()">Try Again</button>
+  </div>
+
+  <div class="pose-chips" id="poseChips">
+    {% for p in poses %}<span class="pose-chip" data-i="{{ loop.index0 }}">{{ p.instruction.split(' ')[0]|capitalize }} {{ loop.index }}</span>{% endfor %}
+  </div>
+
+  <div style="max-width:580px;margin:22px auto 0">
+    <div class="progress-outer"><div class="progress-inner" id="bar"></div></div>
+    <div style="display:flex;justify-content:space-between;margin-top:9px;font-size:.85rem">
+      <span style="color:var(--muted)" id="poseStep"></span>
+      <span style="font-weight:800" id="countText">0 / {{ total_images }}</span>
+    </div>
+  </div>
+
+  <div class="result-wrap" id="doneWrap">
+    <div class="result-icon ok">✓</div>
+    <div class="result-title">Dataset Successfully Collected</div>
+    <div class="result-sub">Taking you to your dashboard…</div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+const TOTAL = {{ total_images }};
+const INTERVAL = {{ interval_ms }};
+const video = document.getElementById('video');
+const snap = document.getElementById('snap');
+const bar = document.getElementById('bar');
+const camFrame = document.getElementById('camFrame');
+const countText = document.getElementById('countText');
+const instruction = document.getElementById('instruction');
+const poseStep = document.getElementById('poseStep');
+const feedback = document.getElementById('feedback');
+const chips = document.querySelectorAll('.pose-chip');
+let busy = false, finished = false, timer = null;
+
+function setChips(activeIdx) {
+  chips.forEach((c, i) => {
+    c.className = 'pose-chip' + (i < activeIdx ? ' done' : i === activeIdx ? ' active' : '');
+  });
+}
+
+function grabFrame() {
+  snap.getContext('2d').drawImage(video, 0, 0, snap.width, snap.height);
+  return snap.toDataURL('image/jpeg', 0.85);
+}
+
+// ---- Phase 1: liveness challenges (anti-spoofing) ----
+async function runLiveness() {
+  const bar = document.getElementById('livenessBar');
+  const stepEl = document.getElementById('livenessStep');
+  bar.style.display = 'block';
+  const start = await fetch('/api/liveness/start', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ purpose: 'capture' })
+  }).then(r => r.json());
+  const livInterval = start.interval_ms || 200;
+  instruction.textContent = start.instruction;
+  stepEl.textContent = 'Challenge ' + start.step + ' of ' + start.total;
+  feedback.textContent = 'Prove you are really here — a photo cannot do this';
+
+  return new Promise(resolve => {
+    let livBusy = false;
+    const livTimer = setInterval(async () => {
+      if (livBusy) return;
+      livBusy = true;
+      try {
+        const d = await fetch('/api/liveness/frame', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ purpose: 'capture', image: grabFrame() })
+        }).then(r => r.json());
+        if (d.failed) {
+          clearInterval(livTimer);
+          bar.style.display = 'none';
+          instruction.textContent = '';
+          document.getElementById('livenessFailReason').textContent = d.reason;
+          document.getElementById('livenessFail').style.display = 'block';
+          if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+          return; // never resolves — user reloads to retry
+        }
+        if (d.done) {
+          clearInterval(livTimer);
+          bar.style.display = 'none';
+          feedback.textContent = '✓ Liveness confirmed — you are real!';
+          feedback.style.color = 'var(--ok)';
+          camFrame.className = 'cam-frame good';
+          setTimeout(resolve, 900);
+          return;
+        }
+        instruction.textContent = d.instruction;
+        stepEl.textContent = 'Challenge ' + d.step + ' of ' + d.total;
+      } catch (e) { /* transient network error, keep trying */ }
+      livBusy = false;
+    }, livInterval);
+  });
+}
+
+// ---- Phase 2: guided dataset capture ----
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' }, audio: false });
+    video.srcObject = stream;
+    video.onloadedmetadata = async () => {
+      snap.width = video.videoWidth; snap.height = video.videoHeight;
+      await runLiveness();
+      instruction.textContent = 'Look straight at the camera';
+      setChips(0);
+      timer = setInterval(sendFrame, INTERVAL);
+    };
+  } catch (e) {
+    instruction.textContent = 'Camera access denied';
+    feedback.textContent = 'Please allow camera access in your browser and reload this page.';
+  }
+}
+
+async function sendFrame() {
+  if (busy || finished) return;
+  busy = true;
+  try {
+    const res = await fetch('/api/capture_frame', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ image: grabFrame() })
+    });
+    const d = await res.json();
+    if (d.needs_liveness) {   // token expired mid-capture: re-verify
+      clearInterval(timer);
+      await runLiveness();
+      timer = setInterval(sendFrame, INTERVAL);
+      busy = false;
+      return;
+    }
+    bar.style.width = (100 * d.count / d.total) + '%';
+    countText.textContent = d.count + ' / ' + d.total;
+    if (d.pose) {
+      instruction.textContent = d.pose.instruction;
+      poseStep.textContent = 'Pose ' + d.pose.step + ' of ' + d.pose.steps +
+        ' — ' + d.pose.captured + '/' + d.pose.target;
+      setChips(d.pose.step - 1);
+    }
+    camFrame.className = 'cam-frame ' + (d.accepted ? 'good' : 'bad');
+    feedback.textContent = d.accepted ? '✓ Captured' : d.reason;
+    feedback.style.color = d.accepted ? 'var(--ok)' : 'var(--warn)';
+    if (d.done) {
+      finished = true;
+      clearInterval(timer);
+      if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+      chips.forEach(c => c.className = 'pose-chip done');
+      document.getElementById('doneWrap').style.display = 'block';
+      instruction.textContent = 'All done!';
+      feedback.textContent = '';
+      setTimeout(() => { window.location = '/capture/complete'; }, 2000);
+    }
+  } catch (e) {
+    feedback.textContent = 'Connection error — retrying…';
+  }
+  busy = false;
+}
+startCamera();
+</script>
+{% endblock %}
