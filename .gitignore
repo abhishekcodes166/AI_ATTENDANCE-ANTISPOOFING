@@ -12,11 +12,6 @@ env/
 ENV/
 
 # ==========================
-# Claude Code
-# ==========================
-.claude/
-
-# ==========================
 # Trained models / training artifacts
 # (the FaceNet model is trained locally from collected data)
 # ==========================
